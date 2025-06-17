@@ -1,0 +1,27 @@
+# Ignore the DB folder
+DB/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+
+# VSCode project settings
+.vscode/
+
+# Environment files
+.env
+.venv/
+env/
+venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Mac system files
+.DS_Store
