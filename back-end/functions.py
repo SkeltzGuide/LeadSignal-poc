@@ -29,57 +29,31 @@ def scrape_target_site(
     soup = BeautifulSoup(response.text, 'html.parser')
     return soup
 
-def timetohire_parser(soup: BeautifulSoup, base_url: str) -> List[Dict]:
-    vacancies = []
-    cards = soup.select("div.VacatureList__Wrapper__Mk_7J")
-
-    for card in cards:
-        # Title
-        title_tag = card.select_one("h3.VacatureList__Title__u4746")
-        title = title_tag.get_text(strip=True) if title_tag else "No title"
-
-        # URL
-        link_tag = card.select_one("a.VacatureList__LinkBtn__3_4n3")
-        href = link_tag.get("href") if link_tag else "#"
-        url = href if href.startswith("http") else base_url.rstrip("/") + href
-
-        # Description
-        desc_tag = card.select_one("div.VacatureList__Content__mfD1j p")
-        description = desc_tag.get_text(strip=True) if desc_tag else ""
-
-        vacancies.append({
-            "company": "TTH",
-            "source": "job_board",
-            "title": title,
-            "url": url,
-            "description": description
-        })
-
-    return vacancies
-
 
 # Hashing
-def generate_job_hash(job: Dict) -> str:
-    """Create a unique hash for a job entry."""
-    data = f"{job['company']}{job['source']}{job['title']}"
-    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+def generate_data_hash(data: Dict) -> str:
+    """Create a unique hash for a data point."""
+    to_hash = f"{data['project']}{data['type']}{data['name']}"
+    return hashlib.sha256(to_hash.encode("utf-8")).hexdigest()
 
-# Database
+# Go up one level from back-end/ and into DB/
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, "jobs.db")
+DB_NAME = os.path.join(BASE_DIR, "..", "DB", "intent_data.db")
+DB_NAME = os.path.abspath(DB_NAME)  # Normalize to absolute path
 
 def init_db():
+    print("🚧 Connecting to DB at:", DB_NAME)
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS jobs (
+        CREATE TABLE IF NOT EXISTS intent_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             hash TEXT UNIQUE,
-            title TEXT,
+            name TEXT,
             url TEXT,
             description TEXT,
-            company TEXT,
-            source TEXT,
+            project TEXT,
+            type TEXT,
             first_seen TEXT,
             last_seen TEXT,
             is_active INTEGER
@@ -88,125 +62,137 @@ def init_db():
     conn.commit()
     conn.close()
 
-def store_jobs(jobs: List[Dict]):
+def store_data(updates: List[Dict]):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
 
     seen_hashes = set()
 
-    for job in jobs:
-        job_hash = generate_job_hash(job)
-        seen_hashes.add(job_hash)
+    for data in updates:
+        data_hash = generate_data_hash(data)
 
-        cursor.execute("SELECT id FROM jobs WHERE hash = ?", (job_hash,))
+        #print(job_hash, '<- job hash')
+
+        seen_hashes.add(data_hash)
+
+        cursor.execute("SELECT id FROM intent_data WHERE hash = ?", (data_hash,))
         exists = cursor.fetchone()
 
         if exists:
             cursor.execute("""
-                UPDATE jobs SET last_seen = ?, is_active = 1 WHERE hash = ?
-            """, (now, job_hash))
+                UPDATE intent_data SET last_seen = ?, is_active = 1 WHERE hash = ?
+            """, (now, data_hash))
         else:
             cursor.execute("""
-                INSERT OR IGNORE INTO jobs (
-                    hash, title, url, description,
-                    company, source,
+                INSERT OR IGNORE INTO intent_data (
+                    hash, name, url, description,
+                    project, type,
                     first_seen, last_seen, is_active
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
-                job_hash,
-                job['title'],
-                job['url'],
-                job['description'],
-                job.get('company', 'Unknown'),
-                job.get('source', 'Unknown'),
+                data_hash,
+                data['name'],
+                data['url'],
+                data['description'],
+                data.get('project', 'Unknown'),
+                data.get('type', 'Unknown'),
                 now,
                 now
             ))
 
-    # Flag missing jobs as inactive
-    cursor.execute("SELECT hash FROM jobs WHERE is_active = 1")
+    # Flag missing updates as inactive
+    cursor.execute("SELECT hash FROM intent_data WHERE is_active = 1")
     all_active = cursor.fetchall()
     for (existing_hash,) in all_active:
         if existing_hash not in seen_hashes:
-            cursor.execute("UPDATE jobs SET is_active = 0 WHERE hash = ?", (existing_hash,))
+            cursor.execute("UPDATE intent_data SET is_active = 0 WHERE hash = ?", (existing_hash,))
 
     conn.commit()
     conn.close()
 
-def detect_job_changes(current_jobs: List[Dict]) -> Dict[str, List[Dict]]:
+def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     now = datetime.utcnow().isoformat()
 
     # Track what's seen this round
     seen_urls = set()
-    new_jobs = []
-    changed_jobs = []
+    new_updates = []
+    changed_updates = []
+    
+    print("number of data: ", len(current_data))
+    for data in current_data:
+        data_hash = generate_data_hash(data)
 
-    for job in current_jobs:
-        job_hash = generate_job_hash(job)
-        url = job['url']
+        print("\n")
+        print('data & hash: ', data, data_hash)
+        url = data['url']
         seen_urls.add(url)
 
-        cursor.execute("SELECT hash FROM jobs WHERE url = ?", (url,))
+        cursor.execute("SELECT hash FROM intent_data WHERE url = ?", (url,))
         row = cursor.fetchone()
 
+        print('content of db with that hash:', data_hash, row)
+
         if row:
+            print('yes row')
             db_hash = row[0]
-            if db_hash != job_hash:
+            print('content of db: ', db_hash)
+            if db_hash != data_hash:
                 # Content changed → update hash and mark as changed
-                job["status"] = "changed"
-                changed_jobs.append(job)
+                data["status"] = "changed"
+                changed_updates.append(data)
                 cursor.execute("""
-                    UPDATE jobs
-                    SET hash = ?, title = ?, description = ?, last_seen = ?, is_active = 1
+                    UPDATE intent_data
+                    SET hash = ?, name = ?, description = ?, last_seen = ?, is_active = 1
                     WHERE url = ?
-                """, (job_hash, job['title'], job['description'], now, url))
+                """, (data_hash, data['name'], data['description'], now, url))
             else:
                 # Just update last_seen
                 cursor.execute("""
-                    UPDATE jobs SET last_seen = ?, is_active = 1 WHERE url = ?
+                    UPDATE intent_data SET last_seen = ?, is_active = 1 WHERE url = ?
                 """, (now, url))
         else:
+            print('no row')
             # New job
-            job["status"] = "new"
-            new_jobs.append(job)
+            data["status"] = "new"
+            new_updates.append(data)
             cursor.execute("""
-                INSERT INTO jobs (
-                    hash, title, url, description,
-                    company, source,
+                INSERT INTO intent_data (
+                    hash, name, url, description,
+                    project, type,
                     first_seen, last_seen, is_active
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
-                job_hash,
-                job['title'],
+                data_hash,
+                data['name'],
                 url,
-                job['description'],
-                job.get('company', 'Unknown'),
-                job.get('source', 'Unknown'),
+                data['description'],
+                data.get('project', 'Unknown'),
+                data.get('type', 'Unknown'),
                 now,
                 now
             ))
 
     # Detect removed jobs (active jobs not in current scrape)
-    cursor.execute("SELECT url FROM jobs WHERE is_active = 1")
+    cursor.execute("SELECT url FROM intent_data WHERE is_active = 1")
     all_active = {row[0] for row in cursor.fetchall()}
 
     removed_urls = all_active - seen_urls
-    removed_jobs = []
+    removed_updates = []
 
     for url in removed_urls:
-        removed_jobs.append({"url": url, "status": "removed"})
+        removed_updates.append({"url": url, "status": "removed"})
         cursor.execute("""
-            UPDATE jobs SET is_active = 0 WHERE url = ?
+            UPDATE intent_data SET is_active = 0 WHERE url = ?
         """, (url,))
 
     conn.commit()
     conn.close()
 
     return {
-        "new": new_jobs,
-        "changed": changed_jobs,
-        "removed": removed_jobs
+        "new": new_updates,
+        "changed": changed_updates,
+        "removed": removed_updates
     }
