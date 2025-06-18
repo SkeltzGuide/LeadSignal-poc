@@ -17,7 +17,7 @@ print("📂 Connecting to DB at:", DB_NAME)
 # Visual User Interface
 # Refresh every 15 seconds
 st.title("📡 LeadSignal Monitor")
-st.caption("Auto-refreshing every 15 seconds to show job change notifications.")
+st.caption("Auto-refreshing every 15 seconds to show notifications on data source changes.")
 
 # Hide "Running..." warning
 st.markdown("""
@@ -59,40 +59,55 @@ def classify_first_seen(row):
 
 df = get_changes()
 
-# Group by project
-projects = df['project'].unique()
 
-for project in projects:
-    with st.expander(f"🏢 {project} ({len(df[df['project'] == project])} entries)", expanded=False):
+
+projects = df['project'].unique()
+tabs = st.tabs([f"🏢 {project}" for project in projects])
+
+for tab, project in zip(tabs, projects):
+    with tab:
         project_df = df[df['project'] == project]
 
-    for _, row in project_df.iterrows():
-        # Show badge only if status is "now"
-        badge = '<span style="color:#2196f3; font-weight:bold;">🔵 New</span>' if row["status"] == "new" else ""
+        for _, row in project_df.iloc[::-1].iterrows():
+            # Check for "New"
+            try:
+                first_seen = datetime.fromisoformat(row["first_seen"])
+                is_new = (datetime.utcnow() - first_seen) < timedelta(seconds=30)
+            except:
+                is_new = False
 
-        st.markdown(f"""
-        <div style="
-            background-color:#f9f9f9;
-            border-radius:10px;
-            padding:14px 18px;
-            margin-bottom:10px;
-            box-shadow:0 1px 2px rgba(0,0,0,0.06);
-            font-family:Arial, sans-serif;
-        ">
-            <div style="font-size:16px; font-weight:600; margin-bottom:6px;">
-                {row['name']} {badge}
-            </div>
-            <div style="font-size:13px; color:#444;">
-                🧠 {row['type']}
-            </div>
-            <div style="font-size:13px; margin:6px 0;">
-                🔗 <a href="{row['url']}" target="_blank" style="color:#1a73e8;">View Job</a>
-            </div>
-            <div style="font-size:11px; color:#888;">
-                🕒 Last Seen: {row['last_seen']}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            badge = '<span style="color:#e53935; font-weight:bold;">🔴 New</span>' if is_new else ""
+
+            with st.container():
+                st.markdown(f"""
+                    <div style="
+                        background-color:#f0f4f8;
+                        border-left: 4px solid #1a73e8;
+                        padding:16px 20px 12px;
+                        margin-bottom:24px;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+                        font-family: 'Segoe UI', sans-serif;
+                        border-radius: 10px;
+                    ">
+                        <div style="font-size:17px; font-weight:600; margin-bottom:6px;">
+                            {row['name']} {badge}
+                        </div>
+                        <div style="font-size:14px; color:#333; margin-bottom:6px;">
+                            💡 {row['type']}<br>
+                            🔗 <a href="{row['url']}" target="_blank" style="color:#1a73e8;">View Link</a>
+                        </div>
+                        <div style="font-size:12px; color:#666; margin-bottom:12px;">
+                            🕒 Last Seen: {row['last_seen']}
+                        </div>
+                        <hr style="border: none; border-top: 1px solid #ccc; margin: 10px 0;">
+                        <div style="font-size:13px; color:#444;">
+                            🧠 <strong>AI Insight:</strong><br>
+                            This lead shows potential interest based on recent interactions. Add custom insights here.
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+
 
 # Sleep and rerun
 time.sleep(15)
