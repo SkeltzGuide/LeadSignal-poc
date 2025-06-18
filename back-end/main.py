@@ -4,6 +4,7 @@ import time
 from functions import scrape_target_site, init_db, DB_NAME, store_data, detect_changes
 from parsers import timetohire_parser, hackernews_parser
 
+
 scheduler = BlockingScheduler()
 
 init_db()
@@ -27,7 +28,7 @@ jobs = {
 """
 
 
-@scheduler.scheduled_job('interval', seconds=30)  # Run every X seconds
+@scheduler.scheduled_job('interval', seconds=10)  # Run every X seconds
 def scheduled_job():
     print(f"📅 Running {len(jobs)} job(s) at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 

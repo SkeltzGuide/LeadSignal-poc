@@ -29,7 +29,7 @@ st.markdown("""
 def get_changes():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("""
-        SELECT name, url, project, type, first_seen, last_seen, is_active
+        SELECT id, name, url, project, type, first_seen, last_seen, is_active
         FROM intent_data
         ORDER BY last_seen ASC
         LIMIT 25
@@ -48,9 +48,18 @@ def classify_first_seen(row):
             return "old"
     except Exception as e:
         return f"error: {e}"
+    
+def get_ai_insight():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("""
+        SELECT id, text
+        FROM ai_insights
+    """, conn)
+    conn.close()
+    return df
 
 df = get_changes()
-
+ins = get_ai_insight()
 
 
 projects = df['project'].unique()
@@ -69,7 +78,7 @@ for tab, project in zip(tabs, projects):
                 is_new = False
 
             badge = '<span style="color:#e53935; font-weight:bold;">🔴 New</span>' if is_new else ""
-
+            
             with st.container():
                 st.markdown(f"""
                     <div style="
@@ -94,7 +103,7 @@ for tab, project in zip(tabs, projects):
                         <hr style="border: none; border-top: 1px solid #ccc; margin: 10px 0;">
                         <div style="font-size:13px; color:#444;">
                             🧠 <strong>AI Insight:</strong><br>
-                            This lead shows potential interest based on recent interactions. Add custom insights here.
+                            {str(ins[ins['id']==row['id']]['text'].values[0])}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)

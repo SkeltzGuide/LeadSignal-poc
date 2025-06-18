@@ -12,6 +12,14 @@ import sqlite3
 from datetime import datetime
 from typing import List, Dict
 import os
+from dotenv import load_dotenv
+load_dotenv()  # Loads variables from .env into environment
+
+# AI integration
+import google.generativeai as genai
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # Functions
 # Scraping
@@ -59,6 +67,16 @@ def init_db():
             is_active INTEGER
         )
     ''')
+
+    # Create related table for AI blurbs
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ai_insights (
+            id INTEGER PRIMARY KEY,
+            text TEXT,
+            FOREIGN KEY (id) REFERENCES intent_data(id) ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -111,6 +129,14 @@ def store_data(updates: List[Dict]):
     conn.commit()
     conn.close()
 
+def generate_insight(input):
+    prompt = f"Generate a one-liner of brief insight on how this piece of input relates to the recruitment industry: {input}"
+    
+    # Replace this with your actual Gemini API logic
+    response = model.generate_content(prompt)    
+
+    return response.text.strip()
+
 def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -121,7 +147,7 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
     new_updates = []
     changed_updates = []
     
-    print("number of data: ", len(current_data))
+    #print("number of data: ", len(current_data))
     for data in current_data:
         data_hash = generate_data_hash(data)
 
@@ -133,12 +159,12 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
         cursor.execute("SELECT hash FROM intent_data WHERE url = ?", (url,))
         row = cursor.fetchone()
 
-        print('content of db with that hash:', data_hash, row)
+        #print('content of db with that hash:', data_hash, row)
 
         if row:
-            print('yes row')
+            print('old update')
             db_hash = row[0]
-            print('content of db: ', db_hash)
+            #print('content of db: ', db_hash)
             if db_hash != data_hash:
                 # Content changed → update hash and mark as changed
                 data["status"] = "changed"
@@ -154,7 +180,7 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
                     UPDATE intent_data SET last_seen = ?, is_active = 1 WHERE url = ?
                 """, (now, url))
         else:
-            print('no row')
+            print('new update')
             # New job
             data["status"] = "new"
             new_updates.append(data)
@@ -174,6 +200,29 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
                 now,
                 now
             ))
+
+            # new row has been inserted
+            print('new update, time to generate AI insights')
+        
+            # Get the ID of the newly inserted row
+            cursor.execute('SELECT id FROM intent_data WHERE hash = ?', (data_hash,))
+            row = cursor.fetchone()
+            if row:
+                print(row)
+                intent_id = row[0]
+
+                print('data: ', data)
+                
+                # Generate AI insight
+                ai_text = generate_insight(data['name'])
+
+                print(id, ai_text)
+                
+                # Insert into ai_insights table
+                cursor.execute('''
+                    INSERT OR REPLACE INTO ai_insights (id, text)
+                    VALUES (?, ?)
+                ''', (intent_id, ai_text))
 
     # Detect removed jobs (active jobs not in current scrape)
     cursor.execute("SELECT url FROM intent_data WHERE is_active = 1")
