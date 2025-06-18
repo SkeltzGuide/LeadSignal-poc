@@ -37,14 +37,6 @@ def get_changes():
     conn.close()
     df["status"] = df.apply(lambda row: classify_first_seen(row), axis=1)
     return df
-
-def detect_status(row):
-    if row["is_active"] == 0:
-        return "❌ Removed"
-    elif row["first_seen"] == row["last_seen"]:
-        return "🆕 New"
-    else:
-        return "♻️ Changed"
     
 def classify_first_seen(row):
     try:

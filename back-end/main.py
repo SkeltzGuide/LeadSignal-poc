@@ -39,7 +39,7 @@ def scheduled_job():
         soup = scrape_target_site(job['site'], job['url'])
         results = job['parser'](soup, job['site'])
 
-        print(results)
+        #print(results)
 
         print("detecting changes")
         changes = detect_changes(results)
