@@ -1,5 +1,6 @@
-# Ignore the DB folder
+# Ignore specific files and folders
 DB/
+main_test.ipynb
 
 # Python cache and virtual environments
 __pycache__/
