@@ -1,8 +1,8 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 import time
 
-from functions import scrape_target_site, init_db, DB_NAME, store_data, detect_changes
-from parsers import timetohire_parser, hackernews_parser
+from functions import scrape_target_site, init_db, store_data, detect_changes
+from parsers import cegeka_articles_parser
 
 
 scheduler = BlockingScheduler()
@@ -11,10 +11,15 @@ init_db()
 
 # Store this in DB at some point
 jobs = {
-    "Hackerrank": {
-        "site": "hackerrank",
-        "url": "https://news.ycombinator.com/newest",
-        "parser": hackernews_parser       
+    "Cegeka": {
+        "site": "cegeka",
+        "url": "https://www.cegeka.com/nl-nl/nieuws",
+        "parser": cegeka_articles_parser       
+    },
+    "Cegeka": {
+        "site": "cegeka",
+        "url": "https://www.cegeka.com/nl-nl/nieuws",
+        "parser": cegeka_articles_parser       
     }
 
 }
@@ -25,6 +30,7 @@ jobs = {
         "url": "https://www.werkenbijtimetohire.nl",
         "parser": timetohire_parser       
     },   
+
 """
 
 
