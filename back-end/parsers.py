@@ -23,6 +23,7 @@ def hackernews_parser(soup, base_url):
         results.append({
             "project": "Hackernews",
             "type": "news",
+            "resource": "news_board",
             "name": title,
             "url": url,
             "description": title
@@ -57,3 +58,25 @@ def timetohire_parser(soup: BeautifulSoup, base_url: str) -> List[Dict]:
         })
 
     return vacancies
+
+def cegeka_articles_parser(soup, base_url):
+    articles = soup.select('wcl-cgk-article-card.article')
+    results = []
+
+    for article in articles:
+        url = article.get('href', '')
+
+        # Extract title from <h5> inside the article
+        title_tag = article.find('h5', class_='spacing_bottom-24 text_weight-semibold')
+        title = title_tag.get_text(strip=True) if title_tag else 'Untitled article'
+
+        results.append({
+            'name': title,
+            'url': url,
+            'description': title,
+            'project': 'cegeka',
+            'resource': 'Own news articles',
+            'type': 'news'
+        })
+
+    return results

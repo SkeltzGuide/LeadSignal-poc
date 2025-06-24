@@ -3,6 +3,7 @@
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
+import json
 
 # Hashing
 import hashlib
@@ -19,7 +20,7 @@ load_dotenv()  # Loads variables from .env into environment
 import google.generativeai as genai
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel(model_name='gemini-2.5-flash')
 
 # Functions
 # Scraping
@@ -61,6 +62,7 @@ def init_db():
             url TEXT,
             description TEXT,
             project TEXT,
+            resource TEXT,
             type TEXT,
             first_seen TEXT,
             last_seen TEXT,
@@ -72,7 +74,9 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ai_insights (
             id INTEGER PRIMARY KEY,
-            text TEXT,
+            priority TEXT,
+            reasoning TEXT,
+            action TEXT,
             FOREIGN KEY (id) REFERENCES intent_data(id) ON DELETE CASCADE
         )
     ''')
@@ -105,15 +109,16 @@ def store_data(updates: List[Dict]):
             cursor.execute("""
                 INSERT OR IGNORE INTO intent_data (
                     hash, name, url, description,
-                    project, type,
+                    project, resource, type,
                     first_seen, last_seen, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
                 data_hash,
                 data['name'],
                 data['url'],
                 data['description'],
                 data.get('project', 'Unknown'),
+                data.get('resource', 'Unknown'),
                 data.get('type', 'Unknown'),
                 now,
                 now
@@ -130,12 +135,29 @@ def store_data(updates: List[Dict]):
     conn.close()
 
 def generate_insight(input):
-    prompt = f"Generate a one-liner of brief insight on how this piece of input relates to the recruitment industry: {input}"
-    
+
+    # Priority level, reasoning and suggested action
+    prompt = (
+        "Antwoord in het nederlands!"
+        "Reason from the perspective of the B2B recruitment for recruiters firm Time to Hire. They supply (temporary) recruiters for other businesses."
+        "How much does this news indicate Time to Hire could find a new lead/sales opportunity in this company? "
+        "Generate a priority level (low, medium, high), a very brief reasoning based on the news, "
+        "and a brief suggested action (e.g., 'do nothing', 'take up contact', 'do more research'). "
+        f"News: {input} "
+        "Your output must be valid JSON,with no extra text or characters, and do not use markdown formatting like ```json.:\n\n"
+        "Output must be exactly in the following structure, "
+        '{\n'
+        '  "priority": "laag" | "medium" | "hoog",\n'
+        '  "reasoning": "<your explanation>",\n'
+        '  "suggested_action": "<recommended step>"\n'
+        '}'
+    )
+
+
     # Replace this with your actual Gemini API logic
     response = model.generate_content(prompt)    
 
-    return response.text.strip()
+    return response.text
 
 def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
     conn = sqlite3.connect(DB_NAME)
@@ -187,15 +209,16 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
             cursor.execute("""
                 INSERT INTO intent_data (
                     hash, name, url, description,
-                    project, type,
+                    project, resource, type,
                     first_seen, last_seen, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (
                 data_hash,
                 data['name'],
                 url,
                 data['description'],
                 data.get('project', 'Unknown'),
+                data.get('resource', 'Unknown'),
                 data.get('type', 'Unknown'),
                 now,
                 now
@@ -214,15 +237,24 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
                 print('data: ', data)
                 
                 # Generate AI insight
-                ai_text = generate_insight(data['name'])
+                response = generate_insight(data['name'])
 
-                print(id, ai_text)
+                print(id, response)
+
+                try:
+                    parsed = json.loads(response)
+                    priority = parsed['priority']
+                    reasoning = parsed['reasoning']
+                    action = parsed['suggested_action']
+                except (json.JSONDecodeError, KeyError) as e:
+                    print("Invalid AI output:", response)
+                    raise e
                 
                 # Insert into ai_insights table
                 cursor.execute('''
-                    INSERT OR REPLACE INTO ai_insights (id, text)
-                    VALUES (?, ?)
-                ''', (intent_id, ai_text))
+                    INSERT OR REPLACE INTO ai_insights (id, priority, reasoning, action)
+                    VALUES (?, ?, ?, ?)
+                ''', (intent_id, priority, reasoning, action))
 
     # Detect removed jobs (active jobs not in current scrape)
     cursor.execute("SELECT url FROM intent_data WHERE is_active = 1")
