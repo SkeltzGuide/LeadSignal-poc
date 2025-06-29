@@ -2,7 +2,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 import time
 
 from functions import scrape_target_site, init_db, store_data, detect_changes
-from parsers import cegeka_articles_parser
+from parsers import cegeka_articles_parser, cegeka_jobs_parser, ns_jobs_parser, hackernews_parser
 
 
 scheduler = BlockingScheduler()
@@ -11,27 +11,27 @@ init_db()
 
 # Store this in DB at some point
 jobs = {
-    "Cegeka": {
+    "Cegeka1": {
         "site": "cegeka",
         "url": "https://www.cegeka.com/nl-nl/nieuws",
         "parser": cegeka_articles_parser       
     },
-    "Cegeka": {
+    "Cegeka2": {
         "site": "cegeka",
-        "url": "https://www.cegeka.com/nl-nl/nieuws",
-        "parser": cegeka_articles_parser       
+        "url": "https://www.cegeka.com/nl-be/jobs/vacatures?",
+        "parser": cegeka_jobs_parser       
+    },
+    "Nederlandse Spoorwegen": {
+        "site": "NS",
+        "url": 'https://www.werkenbijns.nl/vacatures?o=0&n=10&of=1210275&hl=0&hh=40&f=507&f=7442&f=508#vacancy-overview',
+        "parser": ns_jobs_parser       
+    },
+    "Hackernews": {
+        "site": "hackernews",
+        "url": "https://news.ycombinator.com/newest",
+        "parser": hackernews_parser       
     }
-
 }
-
-"""
-    "TTH": {
-        "site": "timetohire",  
-        "url": "https://www.werkenbijtimetohire.nl",
-        "parser": timetohire_parser       
-    },   
-
-"""
 
 
 @scheduler.scheduled_job('interval', seconds=10)  # Run every X seconds

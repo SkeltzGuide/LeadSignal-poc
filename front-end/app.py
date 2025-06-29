@@ -116,8 +116,8 @@ for tab, resource in zip(tabs, resources):
                             {row['name']} {badge}
                         </div>
                         <div style="font-size:14px; color:#333; margin-bottom:6px;">
-                            💡 {row['type']}<br>
-                            🔗 <a href="{row['url']}" target="_blank" style="color:#1a73e8;">View Link</a>
+                            💡 Type: {row['type']}<br>
+                            🔗 Link: <a href="{row['url']}" target="_blank" style="color:#1a73e8;">View Link</a>
                         </div>
                         <div style="font-size:12px; color:#666; margin-bottom:12px;">
                             🕒 Last Seen: {row['last_seen']}

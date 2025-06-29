@@ -206,23 +206,26 @@ def detect_changes(current_data: List[Dict]) -> Dict[str, List[Dict]]:
             # New job
             data["status"] = "new"
             new_updates.append(data)
-            cursor.execute("""
-                INSERT INTO intent_data (
-                    hash, name, url, description,
-                    project, resource, type,
-                    first_seen, last_seen, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            """, (
-                data_hash,
-                data['name'],
-                url,
-                data['description'],
-                data.get('project', 'Unknown'),
-                data.get('resource', 'Unknown'),
-                data.get('type', 'Unknown'),
-                now,
-                now
-            ))
+            try:
+                cursor.execute("""
+                    INSERT INTO intent_data (
+                        hash, name, url, description,
+                        project, resource, type,
+                        first_seen, last_seen, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """, (
+                    data_hash,
+                    data['name'],
+                    url,
+                    data['description'],
+                    data.get('project', 'Unknown'),
+                    data.get('resource', 'Unknown'),
+                    data.get('type', 'Unknown'),
+                    now,
+                    now
+                ))
+            except:
+                print('Non-unique update error: ', data['name'], data['description'])
 
             # new row has been inserted
             print('new update, time to generate AI insights')

@@ -31,34 +31,6 @@ def hackernews_parser(soup, base_url):
 
     return results[:5]
 
-def timetohire_parser(soup: BeautifulSoup, base_url: str) -> List[Dict]:
-    vacancies = []
-    cards = soup.select("div.VacatureList__Wrapper__Mk_7J")
-
-    for card in cards:
-        # Title
-        title_tag = card.select_one("h3.VacatureList__Title__u4746")
-        title = title_tag.get_text(strip=True) if title_tag else "No title"
-
-        # URL
-        link_tag = card.select_one("a.VacatureList__LinkBtn__3_4n3")
-        href = link_tag.get("href") if link_tag else "#"
-        url = href if href.startswith("http") else base_url.rstrip("/") + href
-
-        # Description
-        desc_tag = card.select_one("div.VacatureList__Content__mfD1j p")
-        description = desc_tag.get_text(strip=True) if desc_tag else ""
-
-        vacancies.append({
-            "project": "TTH",
-            "type": "job_board",
-            "name": title,
-            "url": url,
-            "description": description
-        })
-
-    return vacancies
-
 def cegeka_articles_parser(soup, base_url):
     articles = soup.select('wcl-cgk-article-card.article')
     results = []
@@ -74,9 +46,69 @@ def cegeka_articles_parser(soup, base_url):
             'name': title,
             'url': url,
             'description': title,
-            'project': 'cegeka',
-            'resource': 'Own news articles',
+            'project': 'Cegeka',
+            'resource': 'Intern nieuws',
             'type': 'news'
         })
 
-    return results
+    return results[:5]
+
+def cegeka_jobs_parser(soup, base_url="https://www.cegeka.com"):
+    results = []
+
+    vacancies = soup.select('div.vacancy.box')
+    for vacancy in vacancies:
+        link_tag = vacancy.find('a', href=True)
+        url = link_tag['href'] if link_tag else ''
+        if url and not url.startswith('http'):
+            url = base_url + url
+
+        content = vacancy.find('div', class_='vacancy_content')
+        if not content:
+            continue
+
+        title_tag = content.find('h5')
+        title = title_tag.get_text(strip=True) if title_tag else 'Untitled job'
+
+        desc_tag = content.find('p')
+        description = desc_tag.get_text(strip=True) if desc_tag else ''
+
+        results.append({
+            'name': title,
+            'url': url,
+            'description': description,
+            'project': 'Cegeka',
+            'resource': 'Werken bij',
+            'type': 'jobs'
+        })
+
+    return results[:5]
+
+def ns_jobs_parser(soup, base_url="https://www.werkenbijns.nl"):
+    results = []
+    
+    for item in soup.select("li.vacancy-item-cell"):
+        link = item.find("a", class_="vacancy-item", href=True)
+        if not link:
+            continue
+        url = link["href"]
+        if not url.startswith("http"):
+            url = base_url + url
+
+        # Title
+        title_tag = item.select_one(".vacancy-item-titles h3")
+        title = title_tag.get_text(strip=True) if title_tag else "Untitled job"
+
+        # Description
+        desc_tag = item.select_one(".vacancy-item-body .text")
+        description = desc_tag.get_text(strip=True) if desc_tag else ""
+
+        results.append({
+            "name": title,
+            "url": url,
+            "description": description,
+            "project": "Nederlandse Spoorwegen",
+            "resource": "Werken bij",
+            "type": "jobs"
+        })
+    return results[:5]
